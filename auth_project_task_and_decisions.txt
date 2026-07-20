@@ -1,0 +1,70 @@
+PROJECT: Minimal Third-Party Authentication Service
+
+Develop a backend system that provides centralized authentication for one or more protected services.
+
+Users must authenticate through a dedicated authentication service. After authentication, they must be able to request temporary credentials to access a protected service.
+
+The protected service must not directly manage user credentials. It must validate access using the credentials issued by the authentication service.
+
+The system must include:
+- user registration;
+- user login;
+- a simple protected service registry;
+- issuing temporary access credentials;
+- credential validation;
+- access to at least one protected resource;
+- logout or credential invalidation;
+- database persistence;
+- basic automated tests;
+- API documentation.
+
+The candidate must decide and justify:
+- backend language and framework;
+I choose Python because it's the language I'm most confident with for developing backend systems,
+because of its adaptability and because it is easy to create a complete, self-contained and lightweight Docker environment.
+With Python, the FastAPI library is a very good choice because of its strict data structure using Pydantic and its clear and exahustive documentation section.
+
+- database choice;
+The choice of PostgreSQL because of its atomicity property, indispensable in a context where user are registering and token are being issued simultaneously.
+Moreover, it natively supports DATETIME data type, which are great for temporary time-based credentials.
+
+- user data model;
+The user data model is minimal, in order to keep it simple and not to add more complexity than the credentials itself.
+
+- service data model;
+The service data model is designed in order to keep track of every token issued.
+Even if the protected service does not require to handle directly user's information, I added it to keep track of who requested the token, in case anything nasty happens.
+
+- credential format;
+For users, as a first approach, I did not enforced any password format. However, passwords are not saved in clear, but are encrypted
+with a randomic addition thanks to the bcrypt module and the bcrypt.gensalt() feature.
+For tokens, I simplified the approach using a random combination of characters of fixed length, also because of their temporary nature.
+
+- credential expiration strategy & validation strategy;
+Due to the temporary nature, the expiration and validation criteria are merely temporal.
+Once the time available expires, the token reaches its end and becomes invalid by design, without any necessary extra flags.
+
+- error handling strategy;
+The error handling is done inside each API call and exploits the transactional and atomicity properties of PostgreSQL.
+
+- security assumptions and limitations.
+This project has only basic design and functionalities. It provides only a general approach to a centralized authentication service
+which grants access to one or more protected services.
+Further developments may consist in a more secure token generation and validation strategy and
+a more complex logout structure to invalidate existing tokens, instead of simply deleting them.
+
+The project must include:
+- a README with setup instructions;
+- database schema or migrations;
+- example API calls;
+- basic automated tests;
+- a short explanation of the main design choices.
+
+Nice to have:
+- Docker Compose setup to run the application and database locally with a single command;
+- publication of the project on GitHub with a clear repository structure;
+- a .env.example file documenting the required environment variables;
+
+Expected effort: approximately 2–3 working days.
+
+The goal is not to build a production-ready identity provider, but a small backend prototype that demonstrates authentication, database usage, temporary credential management and protected resource access.

@@ -1,0 +1,113 @@
+#
+# Author: Jacopo Li Volsi
+# Rationale: Compose file to run a Minimal Third-Party Authentication Service
+#
+
+# Create the volumes to store database and cache data
+volumes:
+  postgres-data:
+
+networks:
+  auth-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/24
+
+services:
+  # Data storage service
+  postgres:
+    container_name: postgres
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=authentication_service  #optional (specify default database instead of postgres)
+    volumes:
+      - /etc/localtime:/etc/localtime:ro  # sync container time with host time
+      - /etc/timezone:/etc/timezone:ro
+      - postgres-data:/var/lib/postgresql/  # named volume for persistent data
+      - ./../init.sql:/docker-entrypoint-initdb.d/init.sql  # initialize database with custom SQL script
+    networks:
+      auth-network:
+        ipv4_address: 172.20.0.2
+    ports:
+      - "5432:5432"
+    restart: always
+    healthcheck:  # to ensure the database is ready before other containers start
+          test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d authentication_service"]
+          interval: 3s
+          timeout: 5s
+          retries: 5
+          start_period: 10s
+
+# Authentication service, used to manage user registration, login and token generation
+  authentication:
+    container_name: authentication
+    depends_on:
+      postgres:
+        condition: service_healthy
+    image: jlivolsi/authentication
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=authentication_service
+      - AUTHENTICATION_PORT=${AUTHENTICATION_PORT}
+    networks:
+      auth-network:
+        ipv4_address: 172.20.0.3
+    ports:
+      - "${AUTHENTICATION_PORT}:${AUTHENTICATION_PORT}"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro  # sync container time with host time
+      - /etc/timezone:/etc/timezone:ro
+      - ./../:/app:ro
+    command: uvicorn authentication_service:app --host 0.0.0.0 --port ${AUTHENTICATION_PORT} --reload
+
+# Protected service example
+  protected_service_0:
+    container_name: protected_service_0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      authentication:
+        condition: service_started
+    image: jlivolsi/authentication
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=authentication_service
+      - PROTECTED_SERVICE_PORT=${PROTECTED_SERVICE_PORT_0}
+      - PROTECTED_SERVICE_ID=0
+      - PROTECTED_SERVICE_NAME=Template-Service-Name
+    networks:
+      auth-network:
+        ipv4_address: 172.20.0.4
+    ports:
+      - "${PROTECTED_SERVICE_PORT_0}:${PROTECTED_SERVICE_PORT_0}"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro  # sync container time with host time
+      - /etc/timezone:/etc/timezone:ro
+      - ./../:/app:ro
+    command: uvicorn protected_service:app --host 0.0.0.0 --port ${PROTECTED_SERVICE_PORT_0} --reload
+
+  # Database management service, used mainly for debugging and testing purposes
+  pgadmin:
+    container_name: pgadmin
+    profiles: ["debug"]
+    depends_on:
+      - postgres
+    image: dpage/pgadmin4:latest
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_MAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PW}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro  # sync container time with host time
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      auth-network:
+        ipv4_address: 172.20.0.5
+    ports:
+      - "5050:80"
+    restart: always
